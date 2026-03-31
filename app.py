@@ -68,7 +68,9 @@ def parse_fdf_datahub(df):
     rows = []
     uuid_groups = {}
 
+    # =========================
     # GROUP UUID
+    # =========================
     for val in df:
         if pd.isna(val):
             continue
@@ -81,7 +83,9 @@ def parse_fdf_datahub(df):
 
         uuid_groups.setdefault(uuid, []).append(text)
 
+    # =========================
     # PROCESS
+    # =========================
     for uuid, logs in uuid_groups.items():
         request_id = None
         extracted = False
@@ -137,14 +141,22 @@ def parse_fdf_datahub(df):
 
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
-        df_out = df_out.reset_index(drop=True)
+
+        # 🔥🔥🔥 VIN ซ้ำ → เอาตัวล่าสุด
+        df_out = (
+            df_out.iloc[::-1]
+            .drop_duplicates(subset=["VIN"], keep="first")
+            .iloc[::-1]
+            .reset_index(drop=True)
+        )
+
         df_out.insert(0, "No.", df_out.index + 1)
 
     return df_out
 
 
 # =========================
-# FDFTCAP (เดิม)
+# FDFTCAP
 # =========================
 def extract_json_from_log(log):
     try:
@@ -192,7 +204,7 @@ def parse_fdf_tcap(df):
 
 
 # =========================
-# VehicleSettingRequester (เดิม)
+# VehicleSettingRequester
 # =========================
 def extract_body_data(text):
     if "body={" not in text:
