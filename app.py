@@ -22,12 +22,11 @@ def extract_request_id(text):
     return m.group(1) if m else None
 
 # =========================
-# 🔥 PRODUCTION PARSER
+# SAFE JSON
 # =========================
 def safe_json_extract(text):
     if "Response:" not in text:
         return None
-
     try:
         part = text.split("Response:", 1)[1]
         start = part.find("{")
@@ -43,7 +42,9 @@ def safe_json_extract(text):
     except:
         return None
 
-
+# =========================
+# REGEX FALLBACK
+# =========================
 def extract_by_regex(text):
     clean = text.replace('""', '"')
 
@@ -63,14 +64,14 @@ def extract_by_regex(text):
 
     return rows
 
-
+# =========================
+# 🔥 FIXED PRODUCTION PARSER
+# =========================
 def parse_fdf_datahub(df):
     rows = []
     uuid_groups = {}
 
-    # =========================
     # GROUP UUID
-    # =========================
     for val in df:
         if pd.isna(val):
             continue
@@ -83,66 +84,66 @@ def parse_fdf_datahub(df):
 
         uuid_groups.setdefault(uuid, []).append(text)
 
-    # =========================
     # PROCESS
-    # =========================
     for uuid, logs in uuid_groups.items():
         request_id = None
+        temp_rows = []
         extracted = False
 
+        # 🔥 loop ทั้งหมดก่อน (ห้าม break)
         for log in logs:
+            # หา request_id ให้ครบ
             if not request_id:
                 request_id = extract_request_id(log)
 
-            # ✅ JSON FIRST
+            # JSON
             data = safe_json_extract(log)
 
             if data and "data" in data:
                 vehicle_list = data["data"].get("vehicleList", [])
 
                 for item in vehicle_list:
-                    rows.append({
-                        "RequestID": request_id,
+                    temp_rows.append({
                         "VIN": item.get("vin"),
                         "Message": item.get("message"),
                         "Status": str(item.get("status"))
                     })
 
                 extracted = True
-                break
 
-        # 🔥 REGEX FALLBACK
+        # 🔥 fallback ถ้า JSON ไม่มา
         if not extracted:
             for log in logs:
                 if "Response:" in log:
                     fallback_rows = extract_by_regex(log)
+                    temp_rows.extend(fallback_rows)
 
-                    for r in fallback_rows:
-                        rows.append({
-                            "RequestID": request_id,
-                            "VIN": r["VIN"],
-                            "Message": r["Message"],
-                            "Status": r["Status"]
-                        })
-
-        # 🛟 LAST RESORT
-        if not extracted:
+        # 🛟 last resort
+        if not temp_rows:
             for log in logs:
                 vins = re.findall(r'\b[A-Z0-9]{17}\b', log)
                 for vin in vins:
-                    rows.append({
-                        "RequestID": request_id,
+                    temp_rows.append({
                         "VIN": vin,
                         "Message": "UNKNOWN",
                         "Status": "UNKNOWN"
                     })
+
+        # assign request_id ทีหลัง (สำคัญ)
+        for r in temp_rows:
+            rows.append({
+                "RequestID": request_id,
+                "VIN": r["VIN"],
+                "Message": r["Message"],
+                "Status": r["Status"]
+            })
 
     df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
 
-        # 🔥🔥🔥 VIN ซ้ำ → เอาตัวล่าสุด
+        # 🔥 VIN ซ้ำ → เอาล่าสุด
         df_out = (
             df_out.iloc[::-1]
             .drop_duplicates(subset=["VIN"], keep="first")
@@ -153,7 +154,6 @@ def parse_fdf_datahub(df):
         df_out.insert(0, "No.", df_out.index + 1)
 
     return df_out
-
 
 # =========================
 # FDFTCAP
@@ -167,7 +167,6 @@ def extract_json_from_log(log):
         return json.loads(clean)
     except:
         return None
-
 
 def parse_fdf_tcap(df):
     rows = []
@@ -202,7 +201,6 @@ def parse_fdf_tcap(df):
 
     return df_out
 
-
 # =========================
 # VehicleSettingRequester
 # =========================
@@ -220,7 +218,6 @@ def extract_body_data(text):
     except:
         return {}
 
-
 def extract_response_data(text):
     if "Response:" not in text:
         return {}
@@ -236,7 +233,6 @@ def extract_response_data(text):
         }
     except:
         return {}
-
 
 def parse_vehicle_setting(df):
     logs = [str(x) for x in df if not pd.isna(x)]
@@ -275,9 +271,8 @@ def parse_vehicle_setting(df):
 
     return pd.DataFrame(rows)
 
-
 # =========================
-# UPLOAD
+# UI
 # =========================
 c1, c2, c3 = st.columns(3)
 
@@ -293,10 +288,8 @@ with c3:
     st.markdown("### VehicleSettingRequester")
     file3 = st.file_uploader("", key="f3")
 
-
 def read_file(file):
     return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
-
 
 df1 = df2 = df3 = pd.DataFrame()
 
@@ -312,7 +305,6 @@ if file3:
     df = read_file(file3)
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
-
 # =========================
 # SUMMARY
 # =========================
@@ -323,7 +315,6 @@ s1, s2, s3 = st.columns(3)
 s1.metric("FDFDataHub", len(df1))
 s2.metric("FDFTCAP", df2["CountInsert"].sum() if not df2.empty else 0)
 s3.metric("VehicleSettingRequester", len(df3))
-
 
 # =========================
 # TABLE
@@ -338,7 +329,6 @@ if not df2.empty:
 
 if not df3.empty:
     st.dataframe(df3, use_container_width=True)
-
 
 # =========================
 # EXPORT
