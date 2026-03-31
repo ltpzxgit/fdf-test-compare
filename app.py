@@ -8,7 +8,7 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
-# 🎨 CSS
+# CSS
 # =========================
 st.markdown("""
 <style>
@@ -44,6 +44,7 @@ st.markdown("""
 # =========================
 UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request\s*ID[:\s]*([a-f0-9\-]{36})'
+VIN_REGEX = r'"vin"\s*:\s*"([A-Z0-9]+)"'  # 🔥 fallback VIN
 
 def extract_uuid(text):
     m = re.search(UUID_REGEX, text)
@@ -54,7 +55,7 @@ def extract_request_id(text):
     return m.group(1) if m else None
 
 # =========================
-# FDFDataHub (🔥 แก้ตรงนี้)
+# FDFDataHub (🔥 อัปเกรด)
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -87,6 +88,9 @@ def parse_fdf_datahub(df):
             if not response_data:
                 response_data = extract_response_json(log)
 
+        # =========================
+        # ✅ CASE 1: parse JSON ได้ปกติ
+        # =========================
         if response_data and "data" in response_data:
             vehicle_list = response_data["data"].get("vehicleList", [])
             for item in vehicle_list:
@@ -97,14 +101,30 @@ def parse_fdf_datahub(df):
                     "Status": str(item.get("status"))
                 })
 
+        # =========================
+        # 🔥 CASE 2: fallback กู้ VIN จาก raw log
+        # =========================
+        else:
+            for log in logs:
+                if '"status":"0000"' in log:
+                    vins = re.findall(VIN_REGEX, log)
+                    for vin in vins:
+                        rows.append({
+                            "RequestID": request_id,
+                            "VIN": vin,
+                            "Message": "Recovered from raw log",
+                            "Status": "0000"
+                        })
+
     df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
 
-        # ✅ ลบ filter 0008 ออก → ตอนนี้จะแสดง 0008 แล้ว
+        # ❌ ไม่ตัด 0008 แล้ว
         # df_out = df_out[df_out["Status"] != "0008"]
 
+        # dedupe VIN
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
