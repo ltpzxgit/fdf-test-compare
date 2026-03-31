@@ -8,7 +8,7 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
-# 🎨 CSS (ปรับเฉพาะ layout + text)
+# 🎨 CSS
 # =========================
 st.markdown("""
 <style>
@@ -36,7 +36,6 @@ st.markdown("""
     background: rgba(34,197,94,0.1);
     border: 1px solid rgba(34,197,94,0.3);
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -55,7 +54,7 @@ def extract_request_id(text):
     return m.group(1) if m else None
 
 # =========================
-# FDFDataHub
+# FDFDataHub (🔥 แก้ตรงนี้)
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -102,7 +101,10 @@ def parse_fdf_datahub(df):
 
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
-        df_out = df_out[df_out["Status"] != "0008"]
+
+        # ✅ ลบ filter 0008 ออก → ตอนนี้จะแสดง 0008 แล้ว
+        # df_out = df_out[df_out["Status"] != "0008"]
+
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
@@ -228,7 +230,7 @@ def parse_vehicle_setting(df):
     return pd.DataFrame(rows)
 
 # =========================
-# UPLOAD (ไม่มี Upload Files)
+# UPLOAD
 # =========================
 c1, c2, c3 = st.columns(3)
 
