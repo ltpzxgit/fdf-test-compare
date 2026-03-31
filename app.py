@@ -32,7 +32,7 @@ def extract_request_id(text):
     return m.group(1) if m else None
 
 # =========================
-# FDFDataHub (🔥 FINAL LOGIC)
+# JSON Extract
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -44,6 +44,9 @@ def extract_response_json(text):
     except:
         return None
 
+# =========================
+# CORE PARSER (🔥 FINAL FIX)
+# =========================
 def parse_fdf_datahub(df):
     rows = []
     uuid_groups = {}
@@ -65,66 +68,72 @@ def parse_fdf_datahub(df):
             if not request_id:
                 request_id = extract_request_id(log)
 
-            # ดึง VIN จาก request body (เก็บไว้ก่อน)
+            # ดึง VIN จาก request body
             if "body=" in log and "vin=" in log:
                 request_vins.extend(re.findall(BODY_VIN_REGEX, log))
 
-            # หา response JSON
+            # ดึง response json
             if not response_data:
                 response_data = extract_response_json(log)
 
         # =========================
-        # ✅ CASE 1: JSON ปกติ
+        # รวม logic (ไม่ใช้ if/else)
         # =========================
+        vehicle_list = []
         if response_data and "data" in response_data:
             vehicle_list = response_data["data"].get("vehicleList", [])
 
-            for item in vehicle_list:
-                status = str(item.get("status"))
-                message = item.get("message")
-                vin = item.get("vin")
+        has_success = any('"status":"0000"' in log for log in logs)
 
-                if status == "0000" and is_valid_message(message):
-                    rows.append({
-                        "RequestID": request_id,
-                        "VIN": vin,
-                        "Message": message,
-                        "Status": status
-                    })
+        added_vins = set()
 
-        # =========================
-        # 🔥 CASE 2: fallback (จับคู่ request + success)
-        # =========================
-        else:
-            has_success = any('"status":"0000"' in log for log in logs)
+        # ✅ 1. จาก JSON response
+        for item in vehicle_list:
+            status = str(item.get("status"))
+            message = item.get("message")
+            vin = item.get("vin")
 
-            if has_success:
-                for vin in request_vins:
+            if status == "0000" and is_valid_message(message):
+                rows.append({
+                    "RequestID": request_id,
+                    "VIN": vin,
+                    "Message": message,
+                    "Status": status
+                })
+                added_vins.add(vin)
+
+        # 🔥 2. จาก request (ถ้ามี success แต่ JSON ไม่ครบ)
+        if has_success:
+            for vin in request_vins:
+                if vin not in added_vins:
                     rows.append({
                         "RequestID": request_id,
                         "VIN": vin,
                         "Message": "Recovered from request+success",
                         "Status": "0000"
                     })
+                    added_vins.add(vin)
 
-            # 🔥 fallback สุดท้าย: raw response VIN
-            for log in logs:
-                if '"status":"0000"' in log:
-                    vins = re.findall(VIN_REGEX, log)
-                    for vin in vins:
+        # 🔥 3. fallback จาก raw response
+        for log in logs:
+            if '"status":"0000"' in log:
+                vins = re.findall(VIN_REGEX, log)
+                for vin in vins:
+                    if vin not in added_vins:
                         rows.append({
                             "RequestID": request_id,
                             "VIN": vin,
                             "Message": "Recovered from raw response",
                             "Status": "0000"
                         })
+                        added_vins.add(vin)
 
     df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
 
-        # dedupe VIN
+        # dedupe ทั้งไฟล์
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
 
         df_out = df_out.reset_index(drop=True)
