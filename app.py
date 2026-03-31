@@ -13,6 +13,7 @@ st.title("ITOSE Tools - FDF Summary")
 UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request\s*ID[:\s]*([a-f0-9\-]{36})'
 VIN_REGEX = r'"vin"\s*:\s*"([A-Z0-9]+)"'
+BODY_VIN_REGEX = r'vin=([A-Z0-9]+)'
 
 NOT_VALID_KEYWORDS = ["not valid", "duplicate"]
 
@@ -31,7 +32,7 @@ def extract_request_id(text):
     return m.group(1) if m else None
 
 # =========================
-# FDFDataHub (🔥 core logic)
+# FDFDataHub (🔥 FINAL LOGIC)
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -47,6 +48,7 @@ def parse_fdf_datahub(df):
     rows = []
     uuid_groups = {}
 
+    # group logs by UUID
     for val in df:
         if pd.isna(val): continue
         text = str(val)
@@ -57,34 +59,55 @@ def parse_fdf_datahub(df):
     for uuid, logs in uuid_groups.items():
         request_id = None
         response_data = None
+        request_vins = []
 
         for log in logs:
             if not request_id:
                 request_id = extract_request_id(log)
+
+            # ดึง VIN จาก request body (เก็บไว้ก่อน)
+            if "body=" in log and "vin=" in log:
+                request_vins.extend(re.findall(BODY_VIN_REGEX, log))
+
+            # หา response JSON
             if not response_data:
                 response_data = extract_response_json(log)
 
         # =========================
-        # CASE 1: JSON ปกติ
+        # ✅ CASE 1: JSON ปกติ
         # =========================
         if response_data and "data" in response_data:
             vehicle_list = response_data["data"].get("vehicleList", [])
+
             for item in vehicle_list:
                 status = str(item.get("status"))
                 message = item.get("message")
+                vin = item.get("vin")
 
                 if status == "0000" and is_valid_message(message):
                     rows.append({
                         "RequestID": request_id,
-                        "VIN": item.get("vin"),
+                        "VIN": vin,
                         "Message": message,
                         "Status": status
                     })
 
         # =========================
-        # CASE 2: fallback
+        # 🔥 CASE 2: fallback (จับคู่ request + success)
         # =========================
         else:
+            has_success = any('"status":"0000"' in log for log in logs)
+
+            if has_success:
+                for vin in request_vins:
+                    rows.append({
+                        "RequestID": request_id,
+                        "VIN": vin,
+                        "Message": "Recovered from request+success",
+                        "Status": "0000"
+                    })
+
+            # 🔥 fallback สุดท้าย: raw response VIN
             for log in logs:
                 if '"status":"0000"' in log:
                     vins = re.findall(VIN_REGEX, log)
@@ -92,7 +115,7 @@ def parse_fdf_datahub(df):
                         rows.append({
                             "RequestID": request_id,
                             "VIN": vin,
-                            "Message": "Recovered",
+                            "Message": "Recovered from raw response",
                             "Status": "0000"
                         })
 
@@ -110,12 +133,9 @@ def parse_fdf_datahub(df):
     return df_out
 
 # =========================
-# UI / Upload (เหมือนเดิม)
+# UI
 # =========================
-c1 = st.columns(1)[0]
-
-with c1:
-    file1 = st.file_uploader("FDFDataHub")
+file1 = st.file_uploader("Upload FDFDataHub File")
 
 def read_file(file):
     return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
