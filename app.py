@@ -8,6 +8,38 @@ st.set_page_config(page_title="ITOSE - FDF", layout="wide")
 st.title("ITOSE Tools - FDF Summary")
 
 # =========================
+# CSS
+# =========================
+st.markdown("""
+<style>
+.card {
+    padding: 20px;
+    border-radius: 14px;
+    background: linear-gradient(145deg, #0f172a, #111827);
+    border: 1px solid #374151;
+    text-align: center;
+}
+.card-title {
+    font-size: 14px;
+    color: #9ca3af;
+}
+.card-value {
+    font-size: 42px;
+    font-weight: bold;
+    color: white;
+}
+.card-error {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    color: #4ade80;
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.3);
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
 # REGEX
 # =========================
 UUID_REGEX = r'([a-f0-9\-]{36})'
@@ -22,135 +54,84 @@ def extract_request_id(text):
     return m.group(1) if m else None
 
 # =========================
-# SAFE JSON
+# FDFDataHub
 # =========================
-def safe_json_extract(text):
+def extract_response_json(text):
     if "Response:" not in text:
         return None
     try:
-        part = text.split("Response:", 1)[1]
-        start = part.find("{")
-        end = part.rfind("}") + 1
-
-        if start == -1 or end == -1:
-            return None
-
-        clean = part[start:end]
-        clean = clean.replace('""', '"').replace('\\n', '').replace('\\r', '')
-
-        return json.loads(clean)
+        part = text.split("Response:", 1)[1].strip()
+        part = part.replace('""', '"')
+        return json.loads(part)
     except:
         return None
 
-# =========================
-# REGEX FALLBACK
-# =========================
-def extract_by_regex(text):
-    clean = text.replace('""', '"')
-
-    vins = re.findall(r'"vin"\s*:\s*"([A-Z0-9]+)"', clean)
-    messages = re.findall(r'"message"\s*:\s*"([^"]*)"', clean)
-    statuses = re.findall(r'"status"\s*:\s*"(\d+)"', clean)
-
-    rows = []
-    max_len = max(len(vins), len(messages), len(statuses))
-
-    for i in range(max_len):
-        rows.append({
-            "VIN": vins[i] if i < len(vins) else None,
-            "Message": messages[i] if i < len(messages) else None,
-            "Status": statuses[i] if i < len(statuses) else None,
-        })
-
-    return rows
-
-# =========================
-# 🔥 FIXED PRODUCTION PARSER
-# =========================
 def parse_fdf_datahub(df):
     rows = []
     uuid_groups = {}
 
-    # GROUP UUID
     for val in df:
-        if pd.isna(val):
-            continue
-
+        if pd.isna(val): continue
         text = str(val)
         uuid = extract_uuid(text)
-
-        if not uuid:
-            continue
-
+        if not uuid: continue
         uuid_groups.setdefault(uuid, []).append(text)
 
-    # PROCESS
     for uuid, logs in uuid_groups.items():
         request_id = None
-        temp_rows = []
-        extracted = False
+        response_data = None
 
-        # 🔥 loop ทั้งหมดก่อน (ห้าม break)
         for log in logs:
-            # หา request_id ให้ครบ
             if not request_id:
                 request_id = extract_request_id(log)
+            if not response_data:
+                response_data = extract_response_json(log)
 
-            # JSON
-            data = safe_json_extract(log)
+        # =========================
+        # ✅ LOGIC เดิม (ห้ามแตะ)
+        # =========================
+        if response_data and "data" in response_data:
+            vehicle_list = response_data["data"].get("vehicleList", [])
+            for item in vehicle_list:
+                rows.append({
+                    "RequestID": request_id,
+                    "VIN": item.get("vin"),
+                    "Message": item.get("message"),
+                    "Status": str(item.get("status"))
+                })
 
-            if data and "data" in data:
-                vehicle_list = data["data"].get("vehicleList", [])
-
-                for item in vehicle_list:
-                    temp_rows.append({
-                        "VIN": item.get("vin"),
-                        "Message": item.get("message"),
-                        "Status": str(item.get("status"))
-                    })
-
-                extracted = True
-
-        # 🔥 fallback ถ้า JSON ไม่มา
-        if not extracted:
+        # =========================
+        # 🔥 NEW LOGIC (เพิ่มเข้าไป)
+        # =========================
+        elif response_data is None:
             for log in logs:
-                if "Response:" in log:
-                    fallback_rows = extract_by_regex(log)
-                    temp_rows.extend(fallback_rows)
+                if "Response:" in log and '""vin""' in log:
 
-        # 🛟 last resort
-        if not temp_rows:
-            for log in logs:
-                vins = re.findall(r'\b[A-Z0-9]{17}\b', log)
-                for vin in vins:
-                    temp_rows.append({
-                        "VIN": vin,
-                        "Message": "UNKNOWN",
-                        "Status": "UNKNOWN"
-                    })
+                    # แก้ escape
+                    clean = log.replace('""', '"')
 
-        # assign request_id ทีหลัง (สำคัญ)
-        for r in temp_rows:
-            rows.append({
-                "RequestID": request_id,
-                "VIN": r["VIN"],
-                "Message": r["Message"],
-                "Status": r["Status"]
-            })
+                    vins = re.findall(r'"vin"\s*:\s*"([A-Z0-9]+)"', clean)
+                    messages = re.findall(r'"message"\s*:\s*"([^"]+)"', clean)
+                    statuses = re.findall(r'"status"\s*:\s*"(\d+)"', clean)
+
+                    for i in range(len(vins)):
+                        rows.append({
+                            "RequestID": request_id,
+                            "VIN": vins[i],
+                            "Message": messages[i] if i < len(messages) else None,
+                            "Status": statuses[i] if i < len(statuses) else None
+                        })
 
     df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
 
-        # 🔥 VIN ซ้ำ → เอาล่าสุด
-        df_out = (
-            df_out.iloc[::-1]
-            .drop_duplicates(subset=["VIN"], keep="first")
-            .iloc[::-1]
-            .reset_index(drop=True)
-        )
+        # ❌ ไม่ตัด 0008 แล้ว
+        # df_out = df_out[df_out["Status"] != "0008"]
 
+        df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
+        df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
 
     return df_out
@@ -159,6 +140,8 @@ def parse_fdf_datahub(df):
 # FDFTCAP
 # =========================
 def extract_json_from_log(log):
+    if "Response" not in log:
+        return None
     try:
         part = log.split("Response", 1)[1]
         start = part.find("{")
@@ -272,22 +255,25 @@ def parse_vehicle_setting(df):
     return pd.DataFrame(rows)
 
 # =========================
-# UI
+# UPLOAD
 # =========================
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    st.markdown("### FDFDataHub")
+    st.markdown('<div class="upload-title">FDFDataHub</div>', unsafe_allow_html=True)
     file1 = st.file_uploader("", key="f1")
 
 with c2:
-    st.markdown("### FDFTCAP")
+    st.markdown('<div class="upload-title">FDFTCAP</div>', unsafe_allow_html=True)
     file2 = st.file_uploader("", key="f2")
 
 with c3:
-    st.markdown("### VehicleSettingRequester")
+    st.markdown('<div class="upload-title">VehicleSettingRequester</div>', unsafe_allow_html=True)
     file3 = st.file_uploader("", key="f3")
 
+# =========================
+# PROCESS
+# =========================
 def read_file(file):
     return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
@@ -312,9 +298,23 @@ st.markdown("## Summary")
 
 s1, s2, s3 = st.columns(3)
 
-s1.metric("FDFDataHub", len(df1))
-s2.metric("FDFTCAP", df2["CountInsert"].sum() if not df2.empty else 0)
-s3.metric("VehicleSettingRequester", len(df3))
+def card(title, value):
+    return f"""
+    <div class="card">
+        <div class="card-title">{title}</div>
+        <div class="card-value">{value}</div>
+        <div class="card-error">Error: 0</div>
+    </div>
+    """
+
+with s1:
+    st.markdown(card("TCAPLinkageDatahub", len(df1)), unsafe_allow_html=True)
+
+with s2:
+    st.markdown(card("TCAPLinkage", df2["CountInsert"].sum() if not df2.empty else 0), unsafe_allow_html=True)
+
+with s3:
+    st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
 
 # =========================
 # TABLE
@@ -335,7 +335,6 @@ if not df3.empty:
 # =========================
 if not df1.empty or not df2.empty or not df3.empty:
     output = BytesIO()
-
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         if not df1.empty:
             df1.to_excel(writer, index=False, sheet_name='FDFDataHub')
@@ -346,8 +345,4 @@ if not df1.empty or not df2.empty or not df3.empty:
 
     output.seek(0)
 
-    st.download_button(
-        "Download Excel",
-        data=output,
-        file_name="fdf-summary.xlsx"
-    )
+    st.download_button("Download Excel", data=output, file_name="fdf-summary.xlsx")
