@@ -123,6 +123,7 @@ def parse_fdf_datahub(df):
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
 
+        # 🔥 แยก Error
         df_error = df_out[
             df_out["Message"].str.contains("Not Valid|Device serial no. is duplicated", case=False, na=False)
         ].copy()
@@ -131,14 +132,18 @@ def parse_fdf_datahub(df):
             ~df_out["Message"].str.contains("Not Valid|Device serial no. is duplicated", case=False, na=False)
         ].copy()
 
+        # main dedupe
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
         df_out = df_out.reset_index(drop=True)
-        df_out.insert(0, "No.", range(1, len(df_out)+1))
+        df_out["No."] = range(1, len(df_out)+1)
+        df_out = df_out[["No."] + [c for c in df_out.columns if c != "No."]]
 
+        # error dedupe
         if not df_error.empty:
             df_error = df_error.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
             df_error = df_error.reset_index(drop=True)
-            df_error.insert(0, "No.", range(1, len(df_error)+1))
+            df_error["No."] = range(1, len(df_error)+1)
+            df_error = df_error[["No."] + [c for c in df_error.columns if c != "No."]]
 
     return df_out, df_error
 
@@ -189,12 +194,13 @@ def parse_fdf_tcap(df):
         df_out = df_out[df_out["VIN"].notna()]
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
         df_out = df_out.reset_index(drop=True)
-        df_out.insert(0, "No.", range(1, len(df_out)+1))
+        df_out["No."] = range(1, len(df_out)+1)
+        df_out = df_out[["No."] + [c for c in df_out.columns if c != "No."]]
 
     return df_out
 
 # =========================
-# VehicleSettingRequester (เดิม)
+# VehicleSettingRequester
 # =========================
 def extract_body_data(text):
     if "body={" not in text:
@@ -296,7 +302,7 @@ if file3:
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
 # =========================
-# DEVICE BROKEN (แก้เฉพาะตรงนี้)
+# DEVICE BROKEN
 # =========================
 if not df1.empty:
     vins_1 = set(df1["VIN"].dropna())
@@ -308,19 +314,12 @@ if not df1.empty:
         df_broken = df1[df1["VIN"].isin(broken_vins)].copy()
         df_broken = df_broken.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
         df_broken = df_broken.reset_index(drop=True)
-        df_broken.insert(0, "No.", range(1, len(df_broken)+1))
 
-        # 🔥 NEW: ลบออกจาก df1
-        df1 = df1[~df1["VIN"].isin(broken_vins)].copy()
-        df1 = df1.reset_index(drop=True)
-
-        if "No." in df1.columns:
-            df1 = df1.drop(columns=["No."])
-
-        df1.insert(0, "No.", range(1, len(df1)+1))
+        df_broken["No."] = range(1, len(df_broken)+1)
+        df_broken = df_broken[["No."] + [c for c in df_broken.columns if c != "No."]]
 
 # =========================
-# SUMMARY / TABLE / EXPORT (เหมือนเดิม)
+# SUMMARY
 # =========================
 st.markdown("## Summary")
 
@@ -346,6 +345,9 @@ with s4:
 with s5:
     st.markdown(card("Device Broken", len(df_broken)), unsafe_allow_html=True)
 
+# =========================
+# TABLE
+# =========================
 st.divider()
 
 if not df1.empty:
@@ -368,6 +370,9 @@ if not df_broken.empty:
     st.subheader("Device Broken")
     st.dataframe(df_broken, use_container_width=True)
 
+# =========================
+# EXPORT
+# =========================
 if not df1.empty or not df2.empty or not df3.empty:
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
