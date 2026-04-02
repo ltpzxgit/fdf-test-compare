@@ -58,7 +58,7 @@ def extract_vin(text):
     return re.findall(VIN_REGEX, text)
 
 # =========================
-# FDFDataHub (เดิม)
+# FDFDataHub (UPDATED + Error Split)
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -119,16 +119,34 @@ def parse_fdf_datahub(df):
 
     df_out = pd.DataFrame(rows)
 
+    df_error = pd.DataFrame()
+
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
+
+        # 🔥 แยก Error
+        df_error = df_out[
+            df_out["Message"].str.contains("Not Valid|Device serial no. is duplicated", case=False, na=False)
+        ].copy()
+
+        df_out = df_out[
+            ~df_out["Message"].str.contains("Not Valid|Device serial no. is duplicated", case=False, na=False)
+        ].copy()
+
+        # 🔥 dedupe VIN (latest)
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
+
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
 
-    return df_out
+        if not df_error.empty:
+            df_error = df_error.reset_index(drop=True)
+            df_error.insert(0, "No.", range(1, len(df_error)+1))
+
+    return df_out, df_error
 
 # =========================
-# FDFTCAP (🔥 UPDATED รองรับ VIN)
+# FDFTCAP (VIN SUPPORT)
 # =========================
 def extract_json_from_log(log):
     if "Response" not in log:
@@ -167,14 +185,6 @@ def parse_fdf_tcap(df):
                     "StatusCode": data.get("statusCode") if data else None,
                     "Message": data.get("message") if data else None
                 })
-        else:
-            rows.append({
-                "UUID": uuid,
-                "RequestID": uuid_to_req.get(uuid),
-                "VIN": None,
-                "StatusCode": data.get("statusCode") if data else None,
-                "Message": data.get("message") if data else None
-            })
 
     df_out = pd.DataFrame(rows)
 
@@ -279,11 +289,11 @@ with c3:
 def read_file(file):
     return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
-df1 = df2 = df3 = pd.DataFrame()
+df1 = df2 = df3 = df_error = pd.DataFrame()
 
 if file1:
     df = read_file(file1)
-    df1 = parse_fdf_datahub(df["@message"] if "@message" in df.columns else df)
+    df1, df_error = parse_fdf_datahub(df["@message"] if "@message" in df.columns else df)
 
 if file2:
     df = read_file(file2)
@@ -298,7 +308,7 @@ if file3:
 # =========================
 st.markdown("## Summary")
 
-s1, s2, s3 = st.columns(3)
+s1, s2, s3, s4 = st.columns(4)
 
 def card(title, value):
     return f"""
@@ -318,6 +328,9 @@ with s2:
 with s3:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
 
+with s4:
+    st.markdown(card("Not Valid & Duplicate", len(df_error)), unsafe_allow_html=True)
+
 # =========================
 # TABLE
 # =========================
@@ -325,6 +338,10 @@ st.divider()
 
 if not df1.empty:
     st.dataframe(df1, use_container_width=True)
+
+if not df_error.empty:
+    st.subheader("Not Valid & Duplicate")
+    st.dataframe(df_error, use_container_width=True)
 
 if not df2.empty:
     st.dataframe(df2, use_container_width=True)
@@ -340,6 +357,8 @@ if not df1.empty or not df2.empty or not df3.empty:
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         if not df1.empty:
             df1.to_excel(writer, index=False, sheet_name='FDFDataHub')
+        if not df_error.empty:
+            df_error.to_excel(writer, index=False, sheet_name='Not Valid & Duplicate')
         if not df2.empty:
             df2.to_excel(writer, index=False, sheet_name='FDFTCAP')
         if not df3.empty:
