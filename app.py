@@ -19,6 +19,13 @@ st.markdown("""
     border: 1px solid #374151;
     text-align: center;
 }
+.card-red {
+    padding: 20px;
+    border-radius: 14px;
+    background: linear-gradient(145deg, #2a0f0f, #1a0f0f);
+    border: 1px solid #7f1d1d;
+    text-align: center;
+}
 .card-title {
     font-size: 14px;
     color: #9ca3af;
@@ -36,8 +43,29 @@ st.markdown("""
     background: rgba(34,197,94,0.1);
     border: 1px solid rgba(34,197,94,0.3);
 }
+.card-error-red {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    color: #f87171;
+    background: rgba(248,113,113,0.1);
+    border: 1px solid rgba(248,113,113,0.3);
+}
 </style>
 """, unsafe_allow_html=True)
+
+# =========================
+# CARD FUNCTION (🔥 UPDATED)
+# =========================
+def card(title, value, is_red=False):
+    card_class = "card-red" if is_red else "card"
+
+    return f"""
+    <div class="{card_class}">
+        <div class="card-title">{title}</div>
+        <div class="card-value">{value}</div>
+    </div>
+    """
 
 # =========================
 # REGEX
@@ -335,33 +363,28 @@ if not df1.empty:
         df_fdf_error = df_fdf_error[["No."] + [c for c in df_fdf_error.columns if c != "No."]]
 
 # =========================
-# SUMMARY (6 CARDS)
+# SUMMARY (🔥 UPDATED)
 # =========================
 st.markdown("## Summary")
 
-s1, s2, s3, s4, s5, s6 = st.columns(6)
+r1 = st.columns(3)
+r2 = st.columns(3)
 
-def card(title, value):
-    return f"""
-    <div class="card">
-        <div class="card-title">{title}</div>
-        <div class="card-value">{value}</div>
-        <div class="card-error">Error: 0</div>
-    </div>
-    """
-
-with s1:
+# แถวบน (ปกติ)
+with r1[0]:
     st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
-with s2:
+with r1[1]:
     st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
-with s3:
+with r1[2]:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
-with s4:
-    st.markdown(card("Not Valid & Duplicate", len(df_error)), unsafe_allow_html=True)
-with s5:
-    st.markdown(card("Device Broken", len(df_broken)), unsafe_allow_html=True)
-with s6:
-    st.markdown(card("FDF Error", len(df_fdf_error)), unsafe_allow_html=True)
+
+# แถวล่าง (แดงตลอด)
+with r2[0]:
+    st.markdown(card("Not Valid & Duplicate", len(df_error), True), unsafe_allow_html=True)
+with r2[1]:
+    st.markdown(card("Device Broken", len(df_broken), True), unsafe_allow_html=True)
+with r2[2]:
+    st.markdown(card("FDF Error", len(df_fdf_error), True), unsafe_allow_html=True)
 
 # =========================
 # TABLE
