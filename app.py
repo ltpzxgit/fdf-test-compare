@@ -58,7 +58,7 @@ def extract_vin(text):
     return re.findall(VIN_REGEX, text)
 
 # =========================
-# FDFDataHub (UPDATED)
+# FDFDataHub
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -132,13 +132,12 @@ def parse_fdf_datahub(df):
             ~df_out["Message"].str.contains("Not Valid|Device serial no. is duplicated", case=False, na=False)
         ].copy()
 
-        # 🔥 dedupe main
+        # main dedupe
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
-
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
 
-        # 🔥 dedupe error (เอาตัวล่าสุด)
+        # error dedupe
         if not df_error.empty:
             df_error = df_error.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
             df_error = df_error.reset_index(drop=True)
@@ -147,7 +146,7 @@ def parse_fdf_datahub(df):
     return df_out, df_error
 
 # =========================
-# FDFTCAP (VIN SUPPORT)
+# FDFTCAP
 # =========================
 def extract_json_from_log(log):
     if "Response" not in log:
@@ -274,10 +273,8 @@ c1, c2, c3 = st.columns(3)
 
 with c1:
     file1 = st.file_uploader("FDFDataHub", key="f1")
-
 with c2:
     file2 = st.file_uploader("FDFTCAP", key="f2")
-
 with c3:
     file3 = st.file_uploader("VehicleSettingRequester", key="f3")
 
@@ -287,7 +284,7 @@ with c3:
 def read_file(file):
     return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
-df1 = df2 = df3 = df_error = pd.DataFrame()
+df1 = df2 = df3 = df_error = df_broken = pd.DataFrame()
 
 if file1:
     df = read_file(file1)
@@ -302,11 +299,26 @@ if file3:
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
 # =========================
+# DEVICE BROKEN (Sheet 5)
+# =========================
+if not df1.empty:
+    vins_1 = set(df1["VIN"].dropna())
+    vins_2 = set(df2["VIN"].dropna()) if not df2.empty else set()
+
+    broken_vins = vins_1 - vins_2
+
+    if broken_vins:
+        df_broken = df1[df1["VIN"].isin(broken_vins)].copy()
+        df_broken = df_broken.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
+        df_broken = df_broken.reset_index(drop=True)
+        df_broken.insert(0, "No.", range(1, len(df_broken)+1))
+
+# =========================
 # SUMMARY
 # =========================
 st.markdown("## Summary")
 
-s1, s2, s3, s4 = st.columns(4)
+s1, s2, s3, s4, s5 = st.columns(5)
 
 def card(title, value):
     return f"""
@@ -318,34 +330,40 @@ def card(title, value):
     """
 
 with s1:
-    st.markdown(card("TCAPLinkageDatahub", len(df1)), unsafe_allow_html=True)
-
+    st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
 with s2:
-    st.markdown(card("TCAPLinkage", len(df2)), unsafe_allow_html=True)
-
+    st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
 with s3:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
-
 with s4:
     st.markdown(card("Not Valid & Duplicate", len(df_error)), unsafe_allow_html=True)
+with s5:
+    st.markdown(card("Device Broken", len(df_broken)), unsafe_allow_html=True)
 
 # =========================
-# TABLE
+# TABLE (เรียงตาม Sheet)
 # =========================
 st.divider()
 
 if not df1.empty:
+    st.subheader("FDFDataHub")
     st.dataframe(df1, use_container_width=True)
+
+if not df2.empty:
+    st.subheader("FDFTCAP")
+    st.dataframe(df2, use_container_width=True)
+
+if not df3.empty:
+    st.subheader("VehicleSettingRequester")
+    st.dataframe(df3, use_container_width=True)
 
 if not df_error.empty:
     st.subheader("Not Valid & Duplicate")
     st.dataframe(df_error, use_container_width=True)
 
-if not df2.empty:
-    st.dataframe(df2, use_container_width=True)
-
-if not df3.empty:
-    st.dataframe(df3, use_container_width=True)
+if not df_broken.empty:
+    st.subheader("Device Broken")
+    st.dataframe(df_broken, use_container_width=True)
 
 # =========================
 # EXPORT
@@ -361,7 +379,8 @@ if not df1.empty or not df2.empty or not df3.empty:
             df3.to_excel(writer, index=False, sheet_name='VehicleSettingRequester')
         if not df_error.empty:
             df_error.to_excel(writer, index=False, sheet_name='Not Valid & Duplicate')
+        if not df_broken.empty:
+            df_broken.to_excel(writer, index=False, sheet_name='Device Broken')
 
     output.seek(0)
-
     st.download_button("Download Excel", data=output, file_name="fdf-summary.xlsx")
