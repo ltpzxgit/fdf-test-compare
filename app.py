@@ -318,7 +318,7 @@ if not df1.empty:
         df1 = df1[["No."] + [c for c in df1.columns if c != "No."]]
 
 # =========================
-# FDF ERROR (NEW)
+# FDF ERROR
 # =========================
 if not df1.empty:
     vins_1 = set(df1["VIN"].dropna())
@@ -333,6 +333,35 @@ if not df1.empty:
 
         df_fdf_error["No."] = range(1, len(df_fdf_error)+1)
         df_fdf_error = df_fdf_error[["No."] + [c for c in df_fdf_error.columns if c != "No."]]
+
+# =========================
+# SUMMARY (6 CARDS)
+# =========================
+st.markdown("## Summary")
+
+s1, s2, s3, s4, s5, s6 = st.columns(6)
+
+def card(title, value):
+    return f"""
+    <div class="card">
+        <div class="card-title">{title}</div>
+        <div class="card-value">{value}</div>
+        <div class="card-error">Error: 0</div>
+    </div>
+    """
+
+with s1:
+    st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
+with s2:
+    st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
+with s3:
+    st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
+with s4:
+    st.markdown(card("Not Valid & Duplicate", len(df_error)), unsafe_allow_html=True)
+with s5:
+    st.markdown(card("Device Broken", len(df_broken)), unsafe_allow_html=True)
+with s6:
+    st.markdown(card("FDF Error", len(df_fdf_error)), unsafe_allow_html=True)
 
 # =========================
 # TABLE
