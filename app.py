@@ -377,6 +377,8 @@ with r1[1]:
     st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
 with r1[2]:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
 
 # แถวล่าง (แดงตลอด)
 with r2[0]:
