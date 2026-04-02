@@ -44,6 +44,7 @@ st.markdown("""
 # =========================
 UUID_REGEX = r'([a-f0-9\-]{36})'
 REQUEST_ID_REGEX = r'Request\s*ID[:\s]*([a-f0-9\-]{36})'
+VIN_REGEX = r'"vin"\s*:\s*"([A-Z0-9]+)"'
 
 def extract_uuid(text):
     m = re.search(UUID_REGEX, text)
@@ -53,8 +54,11 @@ def extract_request_id(text):
     m = re.search(REQUEST_ID_REGEX, text, re.IGNORECASE)
     return m.group(1) if m else None
 
+def extract_vin(text):
+    return re.findall(VIN_REGEX, text)
+
 # =========================
-# FDFDataHub
+# FDFDataHub (เดิม)
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -87,9 +91,6 @@ def parse_fdf_datahub(df):
             if not response_data:
                 response_data = extract_response_json(log)
 
-        # =========================
-        # ✅ LOGIC เดิม (ห้ามแตะ)
-        # =========================
         if response_data and "data" in response_data:
             vehicle_list = response_data["data"].get("vehicleList", [])
             for item in vehicle_list:
@@ -100,16 +101,10 @@ def parse_fdf_datahub(df):
                     "Status": str(item.get("status"))
                 })
 
-        # =========================
-        # 🔥 NEW LOGIC (เพิ่มเข้าไป)
-        # =========================
         elif response_data is None:
             for log in logs:
                 if "Response:" in log and '""vin""' in log:
-
-                    # แก้ escape
                     clean = log.replace('""', '"')
-
                     vins = re.findall(r'"vin"\s*:\s*"([A-Z0-9]+)"', clean)
                     messages = re.findall(r'"message"\s*:\s*"([^"]+)"', clean)
                     statuses = re.findall(r'"status"\s*:\s*"(\d+)"', clean)
@@ -126,10 +121,6 @@ def parse_fdf_datahub(df):
 
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
-
-        # ❌ ไม่ตัด 0008 แล้ว
-        # df_out = df_out[df_out["Status"] != "0008"]
-
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
@@ -137,7 +128,7 @@ def parse_fdf_datahub(df):
     return df_out
 
 # =========================
-# FDFTCAP
+# FDFTCAP (🔥 UPDATED รองรับ VIN)
 # =========================
 def extract_json_from_log(log):
     if "Response" not in log:
@@ -164,28 +155,39 @@ def parse_fdf_tcap(df):
 
     for text in logs:
         data = extract_json_from_log(text)
-        if not data:
-            continue
-
         uuid = extract_uuid(text)
+        vins = extract_vin(text)
 
-        rows.append({
-            "UUID": uuid,
-            "RequestID": uuid_to_req.get(uuid),
-            "CountInsert": data.get("countInsert", 0),
-            "StatusCode": data.get("statusCode"),
-            "Message": data.get("message")
-        })
+        if vins:
+            for vin in vins:
+                rows.append({
+                    "UUID": uuid,
+                    "RequestID": uuid_to_req.get(uuid),
+                    "VIN": vin,
+                    "StatusCode": data.get("statusCode") if data else None,
+                    "Message": data.get("message") if data else None
+                })
+        else:
+            rows.append({
+                "UUID": uuid,
+                "RequestID": uuid_to_req.get(uuid),
+                "VIN": None,
+                "StatusCode": data.get("statusCode") if data else None,
+                "Message": data.get("message") if data else None
+            })
 
     df_out = pd.DataFrame(rows)
 
     if not df_out.empty:
+        df_out = df_out[df_out["VIN"].notna()]
+        df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
+        df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", range(1, len(df_out)+1))
 
     return df_out
 
 # =========================
-# VehicleSettingRequester
+# VehicleSettingRequester (เดิม)
 # =========================
 def extract_body_data(text):
     if "body={" not in text:
@@ -311,7 +313,7 @@ with s1:
     st.markdown(card("TCAPLinkageDatahub", len(df1)), unsafe_allow_html=True)
 
 with s2:
-    st.markdown(card("TCAPLinkage", df2["CountInsert"].sum() if not df2.empty else 0), unsafe_allow_html=True)
+    st.markdown(card("TCAPLinkage", len(df2)), unsafe_allow_html=True)
 
 with s3:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
