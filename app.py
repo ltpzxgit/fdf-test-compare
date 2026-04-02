@@ -58,7 +58,7 @@ def extract_vin(text):
     return re.findall(VIN_REGEX, text)
 
 # =========================
-# FDFDataHub (UPDATED + Error Split)
+# FDFDataHub (UPDATED)
 # =========================
 def extract_response_json(text):
     if "Response:" not in text:
@@ -118,7 +118,6 @@ def parse_fdf_datahub(df):
                         })
 
     df_out = pd.DataFrame(rows)
-
     df_error = pd.DataFrame()
 
     if not df_out.empty:
@@ -133,13 +132,15 @@ def parse_fdf_datahub(df):
             ~df_out["Message"].str.contains("Not Valid|Device serial no. is duplicated", case=False, na=False)
         ].copy()
 
-        # 🔥 dedupe VIN (latest)
+        # 🔥 dedupe main
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
 
         df_out = df_out.reset_index(drop=True)
         df_out.insert(0, "No.", df_out.index + 1)
 
+        # 🔥 dedupe error (เอาตัวล่าสุด)
         if not df_error.empty:
+            df_error = df_error.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
             df_error = df_error.reset_index(drop=True)
             df_error.insert(0, "No.", range(1, len(df_error)+1))
 
@@ -197,7 +198,7 @@ def parse_fdf_tcap(df):
     return df_out
 
 # =========================
-# VehicleSettingRequester (เดิม)
+# VehicleSettingRequester
 # =========================
 def extract_body_data(text):
     if "body={" not in text:
@@ -272,16 +273,13 @@ def parse_vehicle_setting(df):
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    st.markdown('<div class="upload-title">FDFDataHub</div>', unsafe_allow_html=True)
-    file1 = st.file_uploader("", key="f1")
+    file1 = st.file_uploader("FDFDataHub", key="f1")
 
 with c2:
-    st.markdown('<div class="upload-title">FDFTCAP</div>', unsafe_allow_html=True)
-    file2 = st.file_uploader("", key="f2")
+    file2 = st.file_uploader("FDFTCAP", key="f2")
 
 with c3:
-    st.markdown('<div class="upload-title">VehicleSettingRequester</div>', unsafe_allow_html=True)
-    file3 = st.file_uploader("", key="f3")
+    file3 = st.file_uploader("VehicleSettingRequester", key="f3")
 
 # =========================
 # PROCESS
@@ -357,12 +355,12 @@ if not df1.empty or not df2.empty or not df3.empty:
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         if not df1.empty:
             df1.to_excel(writer, index=False, sheet_name='FDFDataHub')
-        if not df_error.empty:
-            df_error.to_excel(writer, index=False, sheet_name='Not Valid & Duplicate')
         if not df2.empty:
             df2.to_excel(writer, index=False, sheet_name='FDFTCAP')
         if not df3.empty:
             df3.to_excel(writer, index=False, sheet_name='VehicleSettingRequester')
+        if not df_error.empty:
+            df_error.to_excel(writer, index=False, sheet_name='Not Valid & Duplicate')
 
     output.seek(0)
 
