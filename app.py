@@ -123,7 +123,6 @@ def parse_fdf_datahub(df):
     if not df_out.empty:
         df_out = df_out[df_out["VIN"].notna()]
 
-        # 🔥 แยก Error
         df_error = df_out[
             df_out["Message"].str.contains("Not Valid|Device serial no. is duplicated", case=False, na=False)
         ].copy()
@@ -132,7 +131,6 @@ def parse_fdf_datahub(df):
             ~df_out["Message"].str.contains("Not Valid|Device serial no. is duplicated", case=False, na=False)
         ].copy()
 
-        # dedupe
         df_out = df_out.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
         df_out = df_out.reset_index(drop=True)
         df_out["No."] = range(1, len(df_out)+1)
@@ -280,13 +278,10 @@ with c2:
 with c3:
     file3 = st.file_uploader("VehicleSettingRequester", key="f3")
 
-# =========================
-# PROCESS
-# =========================
 def read_file(file):
     return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
-df1 = df2 = df3 = df_error = df_broken = pd.DataFrame()
+df1 = df2 = df3 = df_error = df_broken = df_fdf_error = pd.DataFrame()
 
 if file1:
     df = read_file(file1)
@@ -301,7 +296,7 @@ if file3:
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
 # =========================
-# DEVICE BROKEN (🔥 FIX)
+# DEVICE BROKEN
 # =========================
 if not df1.empty:
     vins_1 = set(df1["VIN"].dropna())
@@ -317,39 +312,27 @@ if not df1.empty:
         df_broken["No."] = range(1, len(df_broken)+1)
         df_broken = df_broken[["No."] + [c for c in df_broken.columns if c != "No."]]
 
-        # 🔥 ลบออกจาก df1
         df1 = df1[~df1["VIN"].isin(broken_vins)].copy()
         df1 = df1.reset_index(drop=True)
-
         df1["No."] = range(1, len(df1)+1)
         df1 = df1[["No."] + [c for c in df1.columns if c != "No."]]
 
 # =========================
-# SUMMARY
+# FDF ERROR (NEW)
 # =========================
-st.markdown("## Summary")
+if not df1.empty:
+    vins_1 = set(df1["VIN"].dropna())
+    vins_3 = set(df3["VIN"].dropna()) if not df3.empty else set()
 
-s1, s2, s3, s4, s5 = st.columns(5)
+    error_vins = vins_1 - vins_3
 
-def card(title, value):
-    return f"""
-    <div class="card">
-        <div class="card-title">{title}</div>
-        <div class="card-value">{value}</div>
-        <div class="card-error">Error: 0</div>
-    </div>
-    """
+    if error_vins:
+        df_fdf_error = df1[df1["VIN"].isin(error_vins)].copy()
+        df_fdf_error = df_fdf_error.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
+        df_fdf_error = df_fdf_error.reset_index(drop=True)
 
-with s1:
-    st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
-with s2:
-    st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
-with s3:
-    st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
-with s4:
-    st.markdown(card("Not Valid & Duplicate", len(df_error)), unsafe_allow_html=True)
-with s5:
-    st.markdown(card("Device Broken", len(df_broken)), unsafe_allow_html=True)
+        df_fdf_error["No."] = range(1, len(df_fdf_error)+1)
+        df_fdf_error = df_fdf_error[["No."] + [c for c in df_fdf_error.columns if c != "No."]]
 
 # =========================
 # TABLE
@@ -376,6 +359,10 @@ if not df_broken.empty:
     st.subheader("Device Broken")
     st.dataframe(df_broken, use_container_width=True)
 
+if not df_fdf_error.empty:
+    st.subheader("FDF Error")
+    st.dataframe(df_fdf_error, use_container_width=True)
+
 # =========================
 # EXPORT
 # =========================
@@ -392,6 +379,8 @@ if not df1.empty or not df2.empty or not df3.empty:
             df_error.to_excel(writer, index=False, sheet_name='Not Valid & Duplicate')
         if not df_broken.empty:
             df_broken.to_excel(writer, index=False, sheet_name='Device Broken')
+        if not df_fdf_error.empty:
+            df_fdf_error.to_excel(writer, index=False, sheet_name='FDF Error')
 
     output.seek(0)
     st.download_button("Download Excel", data=output, file_name="fdf-summary.xlsx")
