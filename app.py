@@ -55,7 +55,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================
-# CARD FUNCTION (🔥 UPDATED)
+# CARD FUNCTION
 # =========================
 def card(title, value, is_red=False):
     card_class = "card-red" if is_red else "card"
@@ -324,7 +324,7 @@ if file3:
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
 # =========================
-# DEVICE BROKEN
+# DEVICE BROKEN (แก้ตรงนี้อย่างเดียว)
 # =========================
 if not df1.empty:
     vins_1 = set(df1["VIN"].dropna())
@@ -340,10 +340,7 @@ if not df1.empty:
         df_broken["No."] = range(1, len(df_broken)+1)
         df_broken = df_broken[["No."] + [c for c in df_broken.columns if c != "No."]]
 
-        df1 = df1[~df1["VIN"].isin(broken_vins)].copy()
-        df1 = df1.reset_index(drop=True)
-        df1["No."] = range(1, len(df1)+1)
-        df1 = df1[["No."] + [c for c in df1.columns if c != "No."]]
+        # ❌ ไม่ลบ df1 แล้ว
 
 # =========================
 # FDF ERROR
@@ -363,24 +360,21 @@ if not df1.empty:
         df_fdf_error = df_fdf_error[["No."] + [c for c in df_fdf_error.columns if c != "No."]]
 
 # =========================
-# SUMMARY (🔥 UPDATED)
+# SUMMARY
 # =========================
 st.markdown("## Summary")
 
 r1 = st.columns(3)
 r2 = st.columns(3)
 
-# แถวบน (ปกติ)
 with r1[0]:
     st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
 with r1[1]:
     st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
 with r1[2]:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
-    
     st.markdown("<br>", unsafe_allow_html=True)
 
-# แถวล่าง (แดงตลอด)
 with r2[0]:
     st.markdown(card("Not Valid & Duplicate", len(df_error), True), unsafe_allow_html=True)
 with r2[1]:
