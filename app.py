@@ -18,6 +18,7 @@ st.markdown("""
     background: linear-gradient(145deg, #0f172a, #111827);
     border: 1px solid #374151;
     text-align: center;
+    margin-bottom: 12px;
 }
 .card-red {
     padding: 20px;
@@ -25,6 +26,7 @@ st.markdown("""
     background: linear-gradient(145deg, #2a0f0f, #1a0f0f);
     border: 1px solid #7f1d1d;
     text-align: center;
+    margin-bottom: 12px;
 }
 .card-title {
     font-size: 14px;
@@ -382,20 +384,20 @@ with r1[1]:
 with r1[2]:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
 
+# spacing กันชน
+st.markdown("<div style='margin-bottom: 24px;'></div>", unsafe_allow_html=True)
+
 # Row 2
 r2 = st.columns(4)
 
 with r2[0]:
     st.markdown(card("Not Valid & Duplicate", len(df_error), True), unsafe_allow_html=True)
-
 with r2[1]:
     st.markdown(card("Device Broken", len(df_broken), True), unsafe_allow_html=True)
-
 with r2[2]:
     st.markdown(card("FDF Error", len(df_fdf_error), True), unsafe_allow_html=True)
-
 with r2[3]:
-    st.markdown(card("System Error & Format Error", len(df_status_error), True), unsafe_allow_html=True)
+    st.markdown(card("StatusCode ≠ 000", len(df_status_error), True), unsafe_allow_html=True)
 
 # =========================
 # TABLE
