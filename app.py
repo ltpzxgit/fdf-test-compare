@@ -343,7 +343,7 @@ if not df1.empty:
         df_fdf_error = df_fdf_error[["No."] + [c for c in df_fdf_error.columns if c != "No."]]
 
 # =========================
-# STATUS ERROR (FROM df3)
+# STATUS ERROR (ONLY df3)
 # =========================
 df_status_error = pd.DataFrame()
 
@@ -352,42 +352,27 @@ if not df3.empty and "StatusCode" in df3.columns:
         (df3["StatusCode"].notna()) & (df3["StatusCode"] != "000")
     ].copy()
 
+    df_status_error = df_status_error.iloc[::-1] \
+        .drop_duplicates(subset=["VIN"], keep="first") \
+        .iloc[::-1]
+
+    df_status_error = df_status_error.reset_index(drop=True)
+    df_status_error["No."] = range(1, len(df_status_error)+1)
+
 # =========================
-# SYSTEM ERROR
+# SYSTEM ERROR (ONLY df3)
 # =========================
 df_system_error = pd.DataFrame()
 
-frames = []
-
-if not df_error.empty:
-    frames.append(df_error)
-
-if not df_fdf_error.empty:
-    frames.append(df_fdf_error)
-
 if not df_status_error.empty:
-    frames.append(df_status_error)
-
-if frames:
-    df_system_error = pd.concat(frames, ignore_index=True)
-
-    if "VIN" in df_system_error.columns:
-        df_system_error = df_system_error.iloc[::-1] \
-            .drop_duplicates(subset=["VIN"], keep="first") \
-            .iloc[::-1]
-
-    df_system_error = df_system_error.reset_index(drop=True)
-    df_system_error["No."] = range(1, len(df_system_error)+1)
-    df_system_error = df_system_error[
-        ["No."] + [c for c in df_system_error.columns if c != "No."]
-    ]
+    df_system_error = df_status_error.copy()
 
 # =========================
-# SUMMARY (UPDATED LAYOUT)
+# SUMMARY
 # =========================
 st.markdown("## Summary")
 
-# Row 1 (3 cards)
+# Row 1
 r1 = st.columns(3)
 
 with r1[0]:
@@ -397,7 +382,7 @@ with r1[1]:
 with r1[2]:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
 
-# Row 2 (4 cards)
+# Row 2
 r2 = st.columns(4)
 
 with r2[0]:
