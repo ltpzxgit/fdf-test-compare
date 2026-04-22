@@ -385,7 +385,7 @@ with r1[2]:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
 
 # spacing กันชน
-st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
 
 # Row 2
 r2 = st.columns(4)
@@ -397,7 +397,7 @@ with r2[1]:
 with r2[2]:
     st.markdown(card("FDF Error", len(df_fdf_error), True), unsafe_allow_html=True)
 with r2[3]:
-    st.markdown(card("StatusCode ≠ 000", len(df_status_error), True), unsafe_allow_html=True)
+    st.markdown(card("System Error & Format Error", len(df_status_error), True), unsafe_allow_html=True)
 
 # =========================
 # TABLE
