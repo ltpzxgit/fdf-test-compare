@@ -35,6 +35,22 @@ st.markdown("""
     font-weight: bold;
     color: white;
 }
+.card-error {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    color: #4ade80;
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.3);
+}
+.card-error-red {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    color: #f87171;
+    background: rgba(248,113,113,0.1);
+    border: 1px solid rgba(248,113,113,0.3);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -293,13 +309,10 @@ def read_file(file):
     return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
 df1 = df2 = df3 = df_error = df_broken = df_fdf_error = pd.DataFrame()
-total_fdf = 0
 
 if file1:
     df = read_file(file1)
-    df_raw = df["@message"] if "@message" in df.columns else df
-    df1, df_error = parse_fdf_datahub(df_raw)
-    total_fdf = len(df1) + len(df_error)
+    df1, df_error = parse_fdf_datahub(df["@message"] if "@message" in df.columns else df)
 
 if file2:
     df = read_file(file2)
@@ -310,7 +323,7 @@ if file3:
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
 # =========================
-# DEVICE BROKEN
+# DEVICE BROKEN (แก้ตรงนี้อย่างเดียว)
 # =========================
 if not df1.empty:
     vins_1 = set(df1["VIN"].dropna())
@@ -325,6 +338,9 @@ if not df1.empty:
 
         df_broken["No."] = range(1, len(df_broken)+1)
         df_broken = df_broken[["No."] + [c for c in df_broken.columns if c != "No."]]
+
+        # 🔥 จุดแก้เดียว
+        df1 = df1[~df1["VIN"].isin(broken_vins)].copy()
 
 # =========================
 # FDF ERROR
@@ -352,7 +368,7 @@ r1 = st.columns(3)
 r2 = st.columns(3)
 
 with r1[0]:
-    st.markdown(card("FDFDataHub", total_fdf), unsafe_allow_html=True)
+    st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
 with r1[1]:
     st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
 with r1[2]:
