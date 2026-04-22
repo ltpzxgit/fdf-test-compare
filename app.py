@@ -35,22 +35,6 @@ st.markdown("""
     font-weight: bold;
     color: white;
 }
-.card-error {
-    margin-top: 12px;
-    padding: 12px;
-    border-radius: 10px;
-    color: #4ade80;
-    background: rgba(34,197,94,0.1);
-    border: 1px solid rgba(34,197,94,0.3);
-}
-.card-error-red {
-    margin-top: 12px;
-    padding: 12px;
-    border-radius: 10px;
-    color: #f87171;
-    background: rgba(248,113,113,0.1);
-    border: 1px solid rgba(248,113,113,0.3);
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -359,17 +343,17 @@ if not df1.empty:
         df_fdf_error = df_fdf_error[["No."] + [c for c in df_fdf_error.columns if c != "No."]]
 
 # =========================
-# STATUS ERROR (NEW)
+# STATUS ERROR (FROM df3)
 # =========================
 df_status_error = pd.DataFrame()
 
-if not df2.empty and "StatusCode" in df2.columns:
-    df_status_error = df2[
-        (df2["StatusCode"].notna()) & (df2["StatusCode"] != "000")
+if not df3.empty and "StatusCode" in df3.columns:
+    df_status_error = df3[
+        (df3["StatusCode"].notna()) & (df3["StatusCode"] != "000")
     ].copy()
 
 # =========================
-# SYSTEM ERROR (NEW)
+# SYSTEM ERROR
 # =========================
 df_system_error = pd.DataFrame()
 
@@ -399,13 +383,12 @@ if frames:
     ]
 
 # =========================
-# SUMMARY
+# SUMMARY (UPDATED LAYOUT)
 # =========================
 st.markdown("## Summary")
 
+# Row 1 (3 cards)
 r1 = st.columns(3)
-r2 = st.columns(3)
-r3 = st.columns(3)
 
 with r1[0]:
     st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
@@ -413,17 +396,20 @@ with r1[1]:
     st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
 with r1[2]:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+
+# Row 2 (4 cards)
+r2 = st.columns(4)
 
 with r2[0]:
     st.markdown(card("Not Valid & Duplicate", len(df_error), True), unsafe_allow_html=True)
+
 with r2[1]:
     st.markdown(card("Device Broken", len(df_broken), True), unsafe_allow_html=True)
+
 with r2[2]:
     st.markdown(card("FDF Error", len(df_fdf_error), True), unsafe_allow_html=True)
 
-# 👉 CARD 9
-with r3[0]:
+with r2[3]:
     st.markdown(card("StatusCode ≠ 000", len(df_status_error), True), unsafe_allow_html=True)
 
 # =========================
@@ -455,7 +441,6 @@ if not df_fdf_error.empty:
     st.subheader("FDF Error")
     st.dataframe(df_fdf_error, use_container_width=True)
 
-# 👉 NEW TABLE
 if not df_system_error.empty:
     st.subheader("System Error & Format Error")
     st.dataframe(df_system_error, use_container_width=True)
@@ -478,8 +463,6 @@ if not df1.empty or not df2.empty or not df3.empty:
             df_broken.to_excel(writer, index=False, sheet_name='Device Broken')
         if not df_fdf_error.empty:
             df_fdf_error.to_excel(writer, index=False, sheet_name='FDF Error')
-
-        # 👉 NEW SHEET
         if not df_system_error.empty:
             df_system_error.to_excel(writer, index=False, sheet_name='System Error & Format Error')
 
