@@ -395,7 +395,7 @@ with r2[2]:
     st.markdown(card("FDF Error", len(df_fdf_error), True), unsafe_allow_html=True)
 
 with r2[3]:
-    st.markdown(card("StatusCode ≠ 000", len(df_status_error), True), unsafe_allow_html=True)
+    st.markdown(card("System Error & Format Error", len(df_status_error), True), unsafe_allow_html=True)
 
 # =========================
 # TABLE
