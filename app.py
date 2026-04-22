@@ -35,22 +35,6 @@ st.markdown("""
     font-weight: bold;
     color: white;
 }
-.card-error {
-    margin-top: 12px;
-    padding: 12px;
-    border-radius: 10px;
-    color: #4ade80;
-    background: rgba(34,197,94,0.1);
-    border: 1px solid rgba(34,197,94,0.3);
-}
-.card-error-red {
-    margin-top: 12px;
-    padding: 12px;
-    border-radius: 10px;
-    color: #f87171;
-    background: rgba(248,113,113,0.1);
-    border: 1px solid rgba(248,113,113,0.3);
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -59,7 +43,6 @@ st.markdown("""
 # =========================
 def card(title, value, is_red=False):
     card_class = "card-red" if is_red else "card"
-
     return f"""
     <div class="{card_class}">
         <div class="card-title">{title}</div>
@@ -309,13 +292,11 @@ with c3:
 def read_file(file):
     return pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
 
-df1 = df2 = df3 = df_error = df_broken = df_fdf_error = pd.DataFrame()
+df1 = df2 = df3 = df_error = df_fdf_error = pd.DataFrame()
 
 if file1:
     df = read_file(file1)
     df1, df_error = parse_fdf_datahub(df["@message"] if "@message" in df.columns else df)
-
-    total_fdf = len(df1) + len(df_error)
 
 if file2:
     df = read_file(file2)
@@ -324,25 +305,6 @@ if file2:
 if file3:
     df = read_file(file3)
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
-
-# =========================
-# DEVICE BROKEN (แก้ตรงนี้อย่างเดียว)
-# =========================
-if not df1.empty:
-    vins_1 = set(df1["VIN"].dropna())
-    vins_2 = set(df2["VIN"].dropna()) if not df2.empty else set()
-
-    broken_vins = vins_1 - vins_2
-
-    if broken_vins:
-        df_broken = df1[df1["VIN"].isin(broken_vins)].copy()
-        df_broken = df_broken.iloc[::-1].drop_duplicates(subset=["VIN"], keep="first").iloc[::-1]
-        df_broken = df_broken.reset_index(drop=True)
-
-        df_broken["No."] = range(1, len(df_broken)+1)
-        df_broken = df_broken[["No."] + [c for c in df_broken.columns if c != "No."]]
-
-        # ❌ ไม่ลบ df1 แล้ว
 
 # =========================
 # FDF ERROR
@@ -367,21 +329,18 @@ if not df1.empty:
 st.markdown("## Summary")
 
 r1 = st.columns(3)
-r2 = st.columns(3)
+r2 = st.columns(2)
 
 with r1[0]:
-    st.markdown(card("FDFDataHub", total_fdf), unsafe_allow_html=True)
+    st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
 with r1[1]:
     st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
 with r1[2]:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
 
 with r2[0]:
     st.markdown(card("Not Valid & Duplicate", len(df_error), True), unsafe_allow_html=True)
 with r2[1]:
-    st.markdown(card("Device Broken", len(df_broken), True), unsafe_allow_html=True)
-with r2[2]:
     st.markdown(card("FDF Error", len(df_fdf_error), True), unsafe_allow_html=True)
 
 # =========================
@@ -405,10 +364,6 @@ if not df_error.empty:
     st.subheader("Not Valid & Duplicate")
     st.dataframe(df_error, use_container_width=True)
 
-if not df_broken.empty:
-    st.subheader("Device Broken")
-    st.dataframe(df_broken, use_container_width=True)
-
 if not df_fdf_error.empty:
     st.subheader("FDF Error")
     st.dataframe(df_fdf_error, use_container_width=True)
@@ -427,8 +382,6 @@ if not df1.empty or not df2.empty or not df3.empty:
             df3.to_excel(writer, index=False, sheet_name='VehicleSettingRequester')
         if not df_error.empty:
             df_error.to_excel(writer, index=False, sheet_name='Not Valid & Duplicate')
-        if not df_broken.empty:
-            df_broken.to_excel(writer, index=False, sheet_name='Device Broken')
         if not df_fdf_error.empty:
             df_fdf_error.to_excel(writer, index=False, sheet_name='FDF Error')
 
