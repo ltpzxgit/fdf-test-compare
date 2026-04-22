@@ -385,7 +385,7 @@ with r1[2]:
     st.markdown(card("VehicleSettingRequester", len(df3)), unsafe_allow_html=True)
 
 # spacing กันชน
-st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
 
 # Row 2
 r2 = st.columns(4)
