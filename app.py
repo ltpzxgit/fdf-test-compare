@@ -315,6 +315,8 @@ if file1:
     df = read_file(file1)
     df1, df_error = parse_fdf_datahub(df["@message"] if "@message" in df.columns else df)
 
+    total_fdf = len(df1) + len(df_error)
+
 if file2:
     df = read_file(file2)
     df2 = parse_fdf_tcap(df["@message"] if "@message" in df.columns else df)
@@ -368,7 +370,7 @@ r1 = st.columns(3)
 r2 = st.columns(3)
 
 with r1[0]:
-    st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
+    st.markdown(card("FDFDataHub", total_fdf), unsafe_allow_html=True)
 with r1[1]:
     st.markdown(card("FDFTCAP", len(df2)), unsafe_allow_html=True)
 with r1[2]:
