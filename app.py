@@ -323,7 +323,7 @@ if file3:
     df3 = parse_vehicle_setting(df["@message"] if "@message" in df.columns else df)
 
 # =========================
-# DEVICE BROKEN (แก้ตรงนี้อย่างเดียว)
+# DEVICE BROKEN
 # =========================
 if not df1.empty:
     vins_1 = set(df1["VIN"].dropna())
@@ -339,7 +339,6 @@ if not df1.empty:
         df_broken["No."] = range(1, len(df_broken)+1)
         df_broken = df_broken[["No."] + [c for c in df_broken.columns if c != "No."]]
 
-        # 🔥 จุดแก้เดียว
         df1 = df1[~df1["VIN"].isin(broken_vins)].copy()
 
 # =========================
@@ -360,12 +359,53 @@ if not df1.empty:
         df_fdf_error = df_fdf_error[["No."] + [c for c in df_fdf_error.columns if c != "No."]]
 
 # =========================
+# STATUS ERROR (NEW)
+# =========================
+df_status_error = pd.DataFrame()
+
+if not df2.empty and "StatusCode" in df2.columns:
+    df_status_error = df2[
+        (df2["StatusCode"].notna()) & (df2["StatusCode"] != "000")
+    ].copy()
+
+# =========================
+# SYSTEM ERROR (NEW)
+# =========================
+df_system_error = pd.DataFrame()
+
+frames = []
+
+if not df_error.empty:
+    frames.append(df_error)
+
+if not df_fdf_error.empty:
+    frames.append(df_fdf_error)
+
+if not df_status_error.empty:
+    frames.append(df_status_error)
+
+if frames:
+    df_system_error = pd.concat(frames, ignore_index=True)
+
+    if "VIN" in df_system_error.columns:
+        df_system_error = df_system_error.iloc[::-1] \
+            .drop_duplicates(subset=["VIN"], keep="first") \
+            .iloc[::-1]
+
+    df_system_error = df_system_error.reset_index(drop=True)
+    df_system_error["No."] = range(1, len(df_system_error)+1)
+    df_system_error = df_system_error[
+        ["No."] + [c for c in df_system_error.columns if c != "No."]
+    ]
+
+# =========================
 # SUMMARY
 # =========================
 st.markdown("## Summary")
 
 r1 = st.columns(3)
 r2 = st.columns(3)
+r3 = st.columns(3)
 
 with r1[0]:
     st.markdown(card("FDFDataHub", len(df1)), unsafe_allow_html=True)
@@ -381,6 +421,10 @@ with r2[1]:
     st.markdown(card("Device Broken", len(df_broken), True), unsafe_allow_html=True)
 with r2[2]:
     st.markdown(card("FDF Error", len(df_fdf_error), True), unsafe_allow_html=True)
+
+# 👉 CARD 9
+with r3[0]:
+    st.markdown(card("StatusCode ≠ 000", len(df_status_error), True), unsafe_allow_html=True)
 
 # =========================
 # TABLE
@@ -411,6 +455,11 @@ if not df_fdf_error.empty:
     st.subheader("FDF Error")
     st.dataframe(df_fdf_error, use_container_width=True)
 
+# 👉 NEW TABLE
+if not df_system_error.empty:
+    st.subheader("System Error & Format Error")
+    st.dataframe(df_system_error, use_container_width=True)
+
 # =========================
 # EXPORT
 # =========================
@@ -429,6 +478,10 @@ if not df1.empty or not df2.empty or not df3.empty:
             df_broken.to_excel(writer, index=False, sheet_name='Device Broken')
         if not df_fdf_error.empty:
             df_fdf_error.to_excel(writer, index=False, sheet_name='FDF Error')
+
+        # 👉 NEW SHEET
+        if not df_system_error.empty:
+            df_system_error.to_excel(writer, index=False, sheet_name='System Error & Format Error')
 
     output.seek(0)
     st.download_button("Download Excel", data=output, file_name="fdf-summary.xlsx")
